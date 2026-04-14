@@ -378,7 +378,8 @@ function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
             </div>
           </div>
           {r.needsVerification&&r.warning&&<div style={{fontSize:11,color:"#f59e0b",marginTop:8,padding:"8px 12px",background:"#f59e0b15",border:"1px solid #f59e0b55",borderRadius:6,fontWeight:600}}>⚠️ {r.warning}{r.ticker?` (ticker ${r.ticker}${r.suggestedName?` — ${r.suggestedName}`:""})`:""}</div>}
-          {r.keep&&r.isin&&!isIsinValid(r.isin)&&<div style={{fontSize:10,color:"#f87171",marginTop:6}}>✗ ISIN invalide (format attendu : 2 lettres + 10 caractères, checksum valide)</div>}
+          {r.keep&&r.isin&&!isIsinFormatOk(r.isin.toUpperCase().trim())&&<div style={{fontSize:10,color:"#f87171",marginTop:6}}>✗ Format ISIN incorrect (attendu : 2 lettres pays + 10 caractères alphanumériques, 12 au total)</div>}
+          {r.keep&&r.isin&&isIsinFormatOk(r.isin.toUpperCase().trim())&&!isIsinChecksumOk(r.isin.toUpperCase().trim())&&<div style={{fontSize:10,color:"#f87171",marginTop:6}}>✗ ISIN au bon format mais checksum invalide — cet ISIN n'existe pas</div>}
           {r.keep&&(!r.quantity||!r.pru)&&<div style={{fontSize:10,color:"#f59e0b",marginTop:6}}>⚠ Quantité ou PRU manquant</div>}
           {r.ticker&&!r.needsVerification&&<div style={{fontSize:9,color:"#4ade80",marginTop:6}}>✓ Ticker Yahoo reconnu : {r.ticker}</div>}
         </div>
