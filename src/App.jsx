@@ -286,6 +286,9 @@ function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
     ticker:p.ticker||"",
     quantity:p.quantity!=null?String(p.quantity):"",
     pru:p.pru!=null?String(p.pru):"",
+    needsVerification:!!p.needsVerification,
+    warning:p.warning||"",
+    suggestedName:p.suggestedName||"",
   })));
   const[saving,setSaving]=useState(false);
   const[error,setError]=useState("");
@@ -339,8 +342,9 @@ function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
               <input type="number" step="0.01" value={r.pru} onChange={e=>upd(r.id,"pru",e.target.value)} style={{...S.inp,padding:"6px 10px",fontSize:12}}/>
             </div>
           </div>
+          {r.needsVerification&&r.warning&&<div style={{fontSize:10,color:"#f59e0b",marginTop:8,padding:"6px 10px",background:"#f59e0b15",border:"1px solid #f59e0b55",borderRadius:6,fontWeight:600}}>⚠️ {r.warning}{r.ticker?` — Ticker suggéré : ${r.ticker}`:""}{r.suggestedName?` (${r.suggestedName})`:""}</div>}
           {r.keep&&!valid(r)&&<div style={{fontSize:10,color:"#f59e0b",marginTop:6}}>⚠ Champs invalides ou manquants</div>}
-          {r.ticker&&<div style={{fontSize:9,color:"#4ade80",marginTop:6}}>✓ Ticker Yahoo reconnu : {r.ticker}</div>}
+          {r.ticker&&!r.needsVerification&&<div style={{fontSize:9,color:"#4ade80",marginTop:6}}>✓ Ticker Yahoo reconnu : {r.ticker}</div>}
         </div>
       ))}
 
