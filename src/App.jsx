@@ -616,6 +616,12 @@ function ProfileScreen({user,onBack,onLoggedOut}){
     if(!emailOk||newEmail===user.email)return;
     setEmailLoading(true);setEmailErr("");setEmailMsg("");
     try{
+      // Vérifier/rafraîchir la session avant updateUser
+      const{data:{session}}=await supabase.auth.getSession();
+      if(!session){
+        const{error:rErr}=await supabase.auth.refreshSession();
+        if(rErr){setEmailErr("Session expirée, merci de vous reconnecter.");setEmailLoading(false);return}
+      }
       const{error:e}=await supabase.auth.updateUser({email:newEmail});
       if(e)throw e;
       setEmailMsg("Un email de confirmation a été envoyé à votre nouvelle adresse. Cliquez sur le lien pour valider le changement.");
@@ -675,7 +681,7 @@ function ProfileScreen({user,onBack,onLoggedOut}){
         </div>
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Nouvelle adresse email</label>
-          <input type="email" value={newEmail} onChange={e=>{setNewEmail(e.target.value);setEmailErr("");setEmailMsg("")}} placeholder="nouvelle@email.com" style={{...S.inp,borderColor:newEmail&&!emailOk?"#f87171":newEmail&&emailOk?"#4ade80":"#333"}}/>
+          <input type="email" autoComplete="off" value={newEmail} onChange={e=>{setNewEmail(e.target.value);setEmailErr("");setEmailMsg("")}} placeholder="nouvelle@email.com" style={{...S.inp,borderColor:newEmail&&!emailOk?"#f87171":newEmail&&emailOk?"#4ade80":"#333"}}/>
           {newEmail&&!emailOk&&<div style={{fontSize:10,color:"#f87171",marginTop:4}}>Format email invalide</div>}
         </div>
         {emailErr&&<div style={{fontSize:11,color:"#f87171",marginBottom:10,padding:"8px 12px",background:"#f8717111",borderRadius:6}}>{emailErr}</div>}
@@ -703,11 +709,11 @@ function ProfileScreen({user,onBack,onLoggedOut}){
       <ProfileSection title="Sécurité" desc="Changez votre mot de passe. Vous devez saisir votre mot de passe actuel pour confirmer votre identité.">
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Mot de passe actuel</label>
-          <input type="password" value={curPass} onChange={e=>{setCurPass(e.target.value);setPwdErr("");setPwdMsg("")}} placeholder="••••••••" style={S.inp}/>
+          <input type="password" autoComplete="current-password" value={curPass} onChange={e=>{setCurPass(e.target.value);setPwdErr("");setPwdMsg("")}} placeholder="••••••••" style={S.inp}/>
         </div>
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Nouveau mot de passe</label>
-          <input type="password" value={newPass} onChange={e=>{setNewPass(e.target.value);setPwdErr("")}} placeholder="••••••••" style={{...S.inp,borderColor:newPass&&!pwdStrong?"#f87171":newPass&&pwdStrong?"#4ade80":"#333"}}/>
+          <input type="password" autoComplete="new-password" value={newPass} onChange={e=>{setNewPass(e.target.value);setPwdErr("")}} placeholder="••••••••" style={{...S.inp,borderColor:newPass&&!pwdStrong?"#f87171":newPass&&pwdStrong?"#4ade80":"#333"}}/>
         </div>
         {newPass.length>0&&(
           <div style={{marginBottom:12}}>
@@ -721,7 +727,7 @@ function ProfileScreen({user,onBack,onLoggedOut}){
         )}
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Confirmer le nouveau mot de passe</label>
-          <input type="password" value={newPass2} onChange={e=>{setNewPass2(e.target.value);setPwdErr("")}} placeholder="••••••••" style={{...S.inp,borderColor:newPass2&&!pwdMatch?"#f87171":pwdMatch?"#4ade80":"#333"}}/>
+          <input type="password" autoComplete="new-password" value={newPass2} onChange={e=>{setNewPass2(e.target.value);setPwdErr("")}} placeholder="••••••••" style={{...S.inp,borderColor:newPass2&&!pwdMatch?"#f87171":pwdMatch?"#4ade80":"#333"}}/>
           {newPass2&&!pwdMatch&&<div style={{fontSize:10,color:"#f87171",marginTop:4}}>Les mots de passe ne correspondent pas</div>}
         </div>
         {pwdErr&&<div style={{fontSize:11,color:"#f87171",marginBottom:10,padding:"8px 12px",background:"#f8717111",borderRadius:6}}>{pwdErr}</div>}
