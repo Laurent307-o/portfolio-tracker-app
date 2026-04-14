@@ -562,6 +562,198 @@ function AddPosition({user,portfolio,onAdded,onBack}){
 }
 
 /* ═══════════════════════════════════════════════
+   PROFILE SCREEN — gestion du compte (Sprint 2)
+   ═══════════════════════════════════════════════ */
+function ProfileScreen({user,onBack,onLoggedOut}){
+  const[profile,setProfile]=useState(null);
+  const[loading,setLoading]=useState(true);
+
+  // Email change
+  const[newEmail,setNewEmail]=useState("");
+  const[emailMsg,setEmailMsg]=useState("");
+  const[emailErr,setEmailErr]=useState("");
+  const[emailLoading,setEmailLoading]=useState(false);
+
+  // Password change
+  const[curPass,setCurPass]=useState("");
+  const[newPass,setNewPass]=useState("");
+  const[newPass2,setNewPass2]=useState("");
+  const[pwdMsg,setPwdMsg]=useState("");
+  const[pwdErr,setPwdErr]=useState("");
+  const[pwdLoading,setPwdLoading]=useState(false);
+
+  // Delete account
+  const[showDelete,setShowDelete]=useState(false);
+  const[confirmText,setConfirmText]=useState("");
+  const[delErr,setDelErr]=useState("");
+  const[delLoading,setDelLoading]=useState(false);
+
+  useEffect(()=>{
+    (async()=>{
+      const{data}=await supabase.from("profiles").select("*").eq("id",user.id).single();
+      setProfile(data);
+      setLoading(false);
+    })();
+  },[user.id]);
+
+  const emailOk=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail);
+  const pwdRules=[{ok:newPass.length>=8,l:"8 car."},{ok:/[A-Z]/.test(newPass),l:"1 maj."},{ok:/[a-z]/.test(newPass),l:"1 min."},{ok:/[0-9]/.test(newPass),l:"1 chiffre"},{ok:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPass),l:"1 symbole"}];
+  const pwdStrong=pwdRules.every(r=>r.ok);
+  const pwdMatch=newPass.length>0&&newPass===newPass2;
+  const canChangePwd=curPass.length>0&&pwdStrong&&pwdMatch;
+
+  const changeEmail=async()=>{
+    if(!emailOk||newEmail===user.email)return;
+    setEmailLoading(true);setEmailErr("");setEmailMsg("");
+    try{
+      const{error:e}=await supabase.auth.updateUser({email:newEmail});
+      if(e)throw e;
+      setEmailMsg("Un email de confirmation a été envoyé à votre nouvelle adresse. Cliquez sur le lien pour valider le changement.");
+      setNewEmail("");
+    }catch(e){setEmailErr(e.message)}
+    finally{setEmailLoading(false)}
+  };
+
+  const changePwd=async()=>{
+    if(!canChangePwd)return;
+    setPwdLoading(true);setPwdErr("");setPwdMsg("");
+    try{
+      // 1. Vérifier l'ancien mdp par re-signin
+      const{error:e1}=await supabase.auth.signInWithPassword({email:user.email,password:curPass});
+      if(e1){setPwdErr("Mot de passe actuel incorrect");setPwdLoading(false);return}
+      // 2. Mettre à jour le mdp
+      const{error:e2}=await supabase.auth.updateUser({password:newPass});
+      if(e2)throw e2;
+      setPwdMsg("Votre mot de passe a été mis à jour avec succès.");
+      setCurPass("");setNewPass("");setNewPass2("");
+    }catch(e){setPwdErr(e.message)}
+    finally{setPwdLoading(false)}
+  };
+
+  const deleteAccount=async()=>{
+    if(confirmText!=="SUPPRIMER")return;
+    setDelLoading(true);setDelErr("");
+    try{
+      const{error:e}=await supabase.from("profiles").update({deleted_at:new Date().toISOString()}).eq("id",user.id);
+      if(e)throw e;
+      await supabase.auth.signOut();
+      onLoggedOut();
+    }catch(e){setDelErr(e.message);setDelLoading(false)}
+  };
+
+  if(loading)return(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"}}>
+      <div style={{width:40,height:40,borderRadius:20,border:"3px solid #222",borderTopColor:"#3b82f6",animation:"spin 1s linear infinite"}}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  );
+
+  const plan=profile?.plan||"free";
+  const isPremium=plan==="premium";
+
+  const Section=({title,desc,children})=>(
+    <div style={{...S.card,marginBottom:16}}>
+      <h3 style={{fontSize:14,fontWeight:800,color:"#f0f0f0",marginBottom:4}}>{title}</h3>
+      {desc&&<p style={{fontSize:11,color:"#666",marginBottom:14}}>{desc}</p>}
+      {children}
+    </div>
+  );
+
+  return(
+    <div style={{maxWidth:560,margin:"0 auto",padding:"24px 16px 80px"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
+      <h2 style={{fontSize:22,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>Mon profil</h2>
+      <p style={{color:"#666",fontSize:12,marginBottom:24}}>Gérez votre compte et vos préférences</p>
+
+      {/* IDENTITÉ */}
+      <Section title="Identité" desc="Votre adresse email sert à vous connecter et recevoir les notifications.">
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Email actuel</label>
+          <div style={{...S.inp,background:"#0a0a18",color:"#888",userSelect:"text"}}>{user.email}</div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Nouvelle adresse email</label>
+          <input type="email" value={newEmail} onChange={e=>{setNewEmail(e.target.value);setEmailErr("");setEmailMsg("")}} placeholder="nouvelle@email.com" style={{...S.inp,borderColor:newEmail&&!emailOk?"#f87171":newEmail&&emailOk?"#4ade80":"#333"}}/>
+          {newEmail&&!emailOk&&<div style={{fontSize:10,color:"#f87171",marginTop:4}}>Format email invalide</div>}
+        </div>
+        {emailErr&&<div style={{fontSize:11,color:"#f87171",marginBottom:10,padding:"8px 12px",background:"#f8717111",borderRadius:6}}>{emailErr}</div>}
+        {emailMsg&&<div style={{fontSize:11,color:"#4ade80",marginBottom:10,padding:"8px 12px",background:"#4ade8015",border:"1px solid #4ade8055",borderRadius:6}}>✓ {emailMsg}</div>}
+        <button onClick={changeEmail} disabled={!emailOk||newEmail===user.email||emailLoading} style={S.btn(emailOk&&newEmail!==user.email&&!emailLoading,"#3b82f6")}>
+          {emailLoading?"Envoi...":"Changer mon adresse email"}
+        </button>
+      </Section>
+
+      {/* PLAN */}
+      <Section title="Mon abonnement">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:"#0d0d20",borderRadius:10,border:`1px solid ${isPremium?"#f59e0b55":"#33333355"}`}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+              <span style={{fontSize:14,fontWeight:800,color:isPremium?"#f59e0b":"#e0e0e0"}}>{isPremium?"Premium":"Gratuit"}</span>
+              {isPremium&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:"#f59e0b22",color:"#f59e0b"}}>⭐</span>}
+            </div>
+            <div style={{fontSize:11,color:"#666"}}>{isPremium?(profile?.plan_expires_at?`Valide jusqu'au ${new Date(profile.plan_expires_at).toLocaleDateString("fr-FR")}`:"Plan premium actif"):"Fonctionnalités de base"}</div>
+          </div>
+          {!isPremium&&<button style={{padding:"8px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",background:"linear-gradient(135deg,#f59e0b,#ef4444)",color:"#fff"}}>Passer premium</button>}
+        </div>
+      </Section>
+
+      {/* SÉCURITÉ */}
+      <Section title="Sécurité" desc="Changez votre mot de passe. Vous devez saisir votre mot de passe actuel pour confirmer votre identité.">
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Mot de passe actuel</label>
+          <input type="password" value={curPass} onChange={e=>{setCurPass(e.target.value);setPwdErr("");setPwdMsg("")}} placeholder="••••••••" style={S.inp}/>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Nouveau mot de passe</label>
+          <input type="password" value={newPass} onChange={e=>{setNewPass(e.target.value);setPwdErr("")}} placeholder="••••••••" style={{...S.inp,borderColor:newPass&&!pwdStrong?"#f87171":newPass&&pwdStrong?"#4ade80":"#333"}}/>
+        </div>
+        {newPass.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",gap:3,marginBottom:6}}>
+              {[1,2,3,4,5].map(i=>{const f=pwdRules.filter(r=>r.ok).length;return<div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=f?(f<=2?"#f87171":f<=3?"#f59e0b":"#4ade80"):"#222"}}/>})}
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {pwdRules.map((r,i)=><span key={i} style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:r.ok?"#4ade8015":"#f8717115",color:r.ok?"#4ade80":"#f87171"}}>{r.ok?"✓":"×"} {r.l}</span>)}
+            </div>
+          </div>
+        )}
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Confirmer le nouveau mot de passe</label>
+          <input type="password" value={newPass2} onChange={e=>{setNewPass2(e.target.value);setPwdErr("")}} placeholder="••••••••" style={{...S.inp,borderColor:newPass2&&!pwdMatch?"#f87171":pwdMatch?"#4ade80":"#333"}}/>
+          {newPass2&&!pwdMatch&&<div style={{fontSize:10,color:"#f87171",marginTop:4}}>Les mots de passe ne correspondent pas</div>}
+        </div>
+        {pwdErr&&<div style={{fontSize:11,color:"#f87171",marginBottom:10,padding:"8px 12px",background:"#f8717111",borderRadius:6}}>{pwdErr}</div>}
+        {pwdMsg&&<div style={{fontSize:11,color:"#4ade80",marginBottom:10,padding:"8px 12px",background:"#4ade8015",border:"1px solid #4ade8055",borderRadius:6}}>✓ {pwdMsg}</div>}
+        <button onClick={changePwd} disabled={!canChangePwd||pwdLoading} style={S.btn(canChangePwd&&!pwdLoading,"#3b82f6")}>
+          {pwdLoading?"Mise à jour...":"Mettre à jour mon mot de passe"}
+        </button>
+      </Section>
+
+      {/* ZONE DANGER */}
+      <div style={{...S.card,marginBottom:16,border:"1px solid #f8717144"}}>
+        <h3 style={{fontSize:14,fontWeight:800,color:"#f87171",marginBottom:4}}>Zone de danger</h3>
+        <p style={{fontSize:11,color:"#666",marginBottom:14}}>La suppression de votre compte est définitive après 30 jours. Vos données sont conservées durant cette période pour vous permettre de revenir en arrière.</p>
+        {!showDelete?(
+          <button onClick={()=>setShowDelete(true)} style={{width:"100%",padding:"11px",borderRadius:10,border:"1px solid #f8717155",background:"transparent",color:"#f87171",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>Supprimer mon compte</button>
+        ):(
+          <>
+            <div style={{fontSize:11,color:"#f87171",marginBottom:10,padding:"10px 12px",background:"#f8717111",border:"1px solid #f8717155",borderRadius:6}}>⚠️ Pour confirmer, tapez <b>SUPPRIMER</b> ci-dessous. Votre compte sera désactivé immédiatement. Vos données seront définitivement supprimées sous 30 jours.</div>
+            <input value={confirmText} onChange={e=>setConfirmText(e.target.value)} placeholder="Tapez SUPPRIMER" style={{...S.inp,marginBottom:10}}/>
+            {delErr&&<div style={{fontSize:11,color:"#f87171",marginBottom:10,padding:"6px 10px",background:"#f8717111",borderRadius:6}}>{delErr}</div>}
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setShowDelete(false);setConfirmText("");setDelErr("")}} style={{flex:1,padding:"11px",borderRadius:10,border:"1px solid #333",background:"#0d0d20",color:"#888",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>Annuler</button>
+              <button onClick={deleteAccount} disabled={confirmText!=="SUPPRIMER"||delLoading} style={{flex:1,padding:"11px",borderRadius:10,border:"none",cursor:confirmText==="SUPPRIMER"&&!delLoading?"pointer":"default",fontSize:13,fontWeight:700,fontFamily:"inherit",background:confirmText==="SUPPRIMER"?"#f87171":"#333",color:confirmText==="SUPPRIMER"?"#fff":"#666"}}>
+                {delLoading?"Suppression...":"Confirmer la suppression"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
    DASHBOARD
    ═══════════════════════════════════════════════ */
 function Dashboard({user,onLogout}){
@@ -569,11 +761,12 @@ function Dashboard({user,onLogout}){
   const[positions,setPositions]=useState([]);
   const[prices,setPrices]=useState({});
   const[loading,setLoading]=useState(true);
-  const[screen,setScreen]=useState("dash"); // dash | addPort | choice | scan | review | manual
+  const[screen,setScreen]=useState("dash"); // dash | addPort | choice | scan | review | manual | profile
   const[selPort,setSelPort]=useState(null);
   const[extracted,setExtracted]=useState([]);
   const[tab,setTab]=useState("synth");
   const[toast,setToast]=useState("");
+  const[menuOpen,setMenuOpen]=useState(false);
 
   const load=useCallback(async()=>{
     setLoading(true);
@@ -603,6 +796,7 @@ function Dashboard({user,onLogout}){
   if(screen==="scan"&&selPort)return<ScanScreen user={user} portfolio={selPort} onBack={()=>setScreen("choice")} onExtracted={list=>{setExtracted(list);setScreen("review")}}/>;
   if(screen==="review"&&selPort)return<ReviewScreen user={user} portfolio={selPort} extracted={extracted} onBack={()=>setScreen("scan")} onDone={n=>{setScreen("dash");load();showToast(`${n} position${n>1?"s":""} ajoutée${n>1?"s":""} ✓`)}}/>;
   if(screen==="manual"&&selPort)return<AddPosition user={user} portfolio={selPort} onAdded={()=>{setScreen("dash");load()}} onBack={()=>setScreen("choice")}/>;
+  if(screen==="profile")return<ProfileScreen user={user} onBack={()=>setScreen("dash")} onLoggedOut={onLogout}/>;
 
   const getPrice=(pos)=>{const p=prices[pos.ticker];return p?.price||pos.current_price||pos.pru};
 
@@ -638,9 +832,23 @@ function Dashboard({user,onLogout}){
           <h1 style={{fontSize:20,fontWeight:800,margin:0,background:"linear-gradient(90deg,#60a5fa,#c084fc)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Portfolio Tracker</h1>
           <p style={{fontSize:10,color:"#555",margin:"2px 0 0"}}>{user.email}</p>
         </div>
-        <div style={{display:"flex",gap:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={()=>load()} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #333",background:"#0d0d20",color:"#60a5fa",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Rafraîchir</button>
-          <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #333",background:"#0d0d20",color:"#666",fontSize:11,fontFamily:"inherit",cursor:"pointer"}}>Déconnexion</button>
+          <button onClick={()=>setScreen("profile")} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #333",background:"#0d0d20",color:"#e0e0e0",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Mon profil</button>
+          <div style={{position:"relative"}}>
+            <button onClick={()=>setMenuOpen(v=>!v)} style={{width:36,height:36,borderRadius:18,border:"1px solid #333",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"#fff",fontSize:13,fontWeight:800,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{(user.email||"?").charAt(0).toUpperCase()}</button>
+            {menuOpen&&<>
+              <div onClick={()=>setMenuOpen(false)} style={{position:"fixed",inset:0,zIndex:50}}/>
+              <div style={{position:"absolute",top:42,right:0,minWidth:200,background:"#12122a",border:"1px solid #2a2a44",borderRadius:10,boxShadow:"0 12px 40px #00000088",zIndex:51,overflow:"hidden"}}>
+                <div style={{padding:"10px 14px",borderBottom:"1px solid #2a2a44"}}>
+                  <div style={{fontSize:11,color:"#888"}}>Connecté en tant que</div>
+                  <div style={{fontSize:12,color:"#e0e0e0",fontWeight:600,wordBreak:"break-all"}}>{user.email}</div>
+                </div>
+                <button onClick={()=>{setMenuOpen(false);setScreen("profile")}} style={{display:"block",width:"100%",textAlign:"left",padding:"10px 14px",background:"none",border:"none",color:"#e0e0e0",fontSize:12,fontFamily:"inherit",cursor:"pointer"}}>👤 Mon profil</button>
+                <button onClick={()=>{setMenuOpen(false);onLogout()}} style={{display:"block",width:"100%",textAlign:"left",padding:"10px 14px",background:"none",border:"none",color:"#f87171",fontSize:12,fontFamily:"inherit",cursor:"pointer",borderTop:"1px solid #2a2a44"}}>↪ Déconnexion</button>
+              </div>
+            </>}
+          </div>
         </div>
       </div>
 
