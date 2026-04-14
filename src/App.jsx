@@ -294,12 +294,47 @@ function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
   const[error,setError]=useState("");
 
   const upd=(id,field,val)=>setRows(rs=>rs.map(r=>r.id===id?{...r,[field]:val}:r));
-  const valid=r=>r.keep&&r.isin.length>=10&&r.name&&Number(r.quantity)>0&&Number(r.pru)>0;
+
+  // Validation format ISIN (12 chars, 2 lettres pays + 9 alphanumériques + 1 check digit Luhn)
+  const isIsinFormatOk=s=>typeof s==="string"&&/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/.test(s);
+  const isIsinChecksumOk=s=>{
+    if(!isIsinFormatOk(s))return false;
+    // Convertir chaque lettre en nombre (A=10, B=11, ..., Z=35), puis appliquer Luhn
+    const digits=s.split("").map(c=>{
+      const code=c.charCodeAt(0);
+      if(code>=48&&code<=57)return c;// 0-9
+      return String(code-55);// A=65 → 10
+    }).join("");
+    let sum=0,alt=false;
+    for(let i=digits.length-1;i>=0;i--){
+      let n=parseInt(digits[i],10);
+      if(alt){n*=2;if(n>9)n-=9;}
+      sum+=n;alt=!alt;
+    }
+    return sum%10===0;
+  };
+  const isIsinValid=s=>isIsinFormatOk((s||"").toUpperCase().trim())&&isIsinChecksumOk((s||"").toUpperCase().trim());
+
+  const valid=r=>r.keep&&isIsinValid(r.isin)&&r.name&&Number(r.quantity)>0&&Number(r.pru)>0;
   const kept=rows.filter(r=>r.keep);
   const allValid=kept.length>0&&kept.every(valid);
 
   const save=async()=>{
-    if(!allValid)return;
+    // Contrôle à la validation : détecter les ISIN manquants ou invalides
+    const missing=kept.filter(r=>!r.isin||!r.isin.trim());
+    if(missing.length>0){
+      setError(`ISIN manquant pour ${missing.length} position${missing.length>1?"s":""} — merci de remplir tous les ISIN avant de valider.`);
+      return;
+    }
+    const invalid=kept.filter(r=>!isIsinValid(r.isin));
+    if(invalid.length>0){
+      setError(`ISIN non connu, merci d'indiquer un ISIN correct (${invalid.map(r=>r.name).join(", ")})`);
+      return;
+    }
+    if(!allValid){
+      setError("Certains champs sont invalides ou manquants.");
+      return;
+    }
     setSaving(true);setError("");
     const payload=kept.map(r=>({
       portfolio_id:portfolio.id,
@@ -342,8 +377,9 @@ function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
               <input type="number" step="0.01" value={r.pru} onChange={e=>upd(r.id,"pru",e.target.value)} style={{...S.inp,padding:"6px 10px",fontSize:12}}/>
             </div>
           </div>
-          {r.needsVerification&&r.warning&&<div style={{fontSize:10,color:"#f59e0b",marginTop:8,padding:"6px 10px",background:"#f59e0b15",border:"1px solid #f59e0b55",borderRadius:6,fontWeight:600}}>⚠️ {r.warning}{r.ticker?` — Ticker suggéré : ${r.ticker}`:""}{r.suggestedName?` (${r.suggestedName})`:""}</div>}
-          {r.keep&&!valid(r)&&<div style={{fontSize:10,color:"#f59e0b",marginTop:6}}>⚠ Champs invalides ou manquants</div>}
+          {r.needsVerification&&r.warning&&<div style={{fontSize:11,color:"#f59e0b",marginTop:8,padding:"8px 12px",background:"#f59e0b15",border:"1px solid #f59e0b55",borderRadius:6,fontWeight:600}}>⚠️ {r.warning}{r.ticker?` (ticker ${r.ticker}${r.suggestedName?` — ${r.suggestedName}`:""})`:""}</div>}
+          {r.keep&&r.isin&&!isIsinValid(r.isin)&&<div style={{fontSize:10,color:"#f87171",marginTop:6}}>✗ ISIN invalide (format attendu : 2 lettres + 10 caractères, checksum valide)</div>}
+          {r.keep&&(!r.quantity||!r.pru)&&<div style={{fontSize:10,color:"#f59e0b",marginTop:6}}>⚠ Quantité ou PRU manquant</div>}
           {r.ticker&&!r.needsVerification&&<div style={{fontSize:9,color:"#4ade80",marginTop:6}}>✓ Ticker Yahoo reconnu : {r.ticker}</div>}
         </div>
       ))}
@@ -351,7 +387,7 @@ function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
       {error&&<div style={{fontSize:11,color:"#f87171",marginBottom:12,padding:"8px 12px",background:"#f8717111",borderRadius:8}}>{error}</div>}
 
       <div style={{position:"sticky",bottom:0,background:"linear-gradient(to top,#09091a,#09091aee 70%,transparent)",padding:"16px 0",marginTop:16}}>
-        <button onClick={save} disabled={!allValid||saving} style={S.btn(allValid&&!saving,portfolio.color)}>
+        <button onClick={save} disabled={saving||kept.length===0} style={S.btn(!saving&&kept.length>0,portfolio.color)}>
           {saving?"Enregistrement...":`Confirmer ${kept.length} position${kept.length>1?"s":""}`}
         </button>
       </div>
