@@ -14,18 +14,33 @@ btn:(ok,c="#3b82f6")=>({width:"100%",padding:"13px",borderRadius:10,border:"none
    AUTH SCREEN
    ═══════════════════════════════════════════════ */
 function AuthScreen({onAuth}){
-  const[mode,setMode]=useState("register");
+  const[mode,setMode]=useState("register"); // register | login | forgot
   const[email,setEmail]=useState("");
   const[pass,setPass]=useState("");
   const[loading,setLoading]=useState(false);
   const[error,setError]=useState("");
+  const[infoMsg,setInfoMsg]=useState("");
 
   const emailOk=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const rules=[{ok:pass.length>=8,l:"8 car."},{ok:/[A-Z]/.test(pass),l:"1 maj."},{ok:/[a-z]/.test(pass),l:"1 min."},{ok:/[0-9]/.test(pass),l:"1 chiffre"},{ok:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass),l:"1 symbole"}];
-  const passOk=mode==="login"?pass.length>=1:rules.every(r=>r.ok);
-  const canSubmit=emailOk&&passOk;
+  const passOk=mode==="login"?pass.length>=1:mode==="forgot"?true:rules.every(r=>r.ok);
+  const canSubmit=mode==="forgot"?emailOk:(emailOk&&passOk);
+
+  const sendReset=async()=>{
+    if(!emailOk)return;
+    setLoading(true);setError("");setInfoMsg("");
+    try{
+      const{error:e}=await supabase.auth.resetPasswordForEmail(email,{
+        redirectTo:window.location.origin+"/",
+      });
+      if(e)throw e;
+      setInfoMsg("Si un compte existe avec cet email, un lien de réinitialisation vient d'être envoyé. Vérifie ta boîte mail (et les spams).");
+    }catch(e){setError(e.message)}
+    finally{setLoading(false)}
+  };
 
   const submit=async()=>{
+    if(mode==="forgot")return sendReset();
     if(!canSubmit)return;
     setLoading(true);setError("");
     try{
@@ -56,24 +71,29 @@ function AuthScreen({onAuth}){
           <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:900,color:"#fff",marginBottom:12,boxShadow:"0 12px 40px #3b82f644"}}>P</div>
           <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 2px",background:"linear-gradient(90deg,#60a5fa,#c084fc)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Portfolio Tracker</h1>
         </div>
-        <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:4}}>{mode==="register"?"Créer un compte":"Se connecter"}</h2>
-        <p style={{color:"#666",fontSize:12,marginBottom:24}}>{mode==="register"?"Gratuit, en 10 secondes":"Bon retour parmi nous"}</p>
+        <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:4}}>{mode==="register"?"Créer un compte":mode==="forgot"?"Mot de passe oublié":"Se connecter"}</h2>
+        <p style={{color:"#666",fontSize:12,marginBottom:24}}>{mode==="register"?"Gratuit, en 10 secondes":mode==="forgot"?"Saisis ton email, on t'envoie un lien de réinitialisation":"Bon retour parmi nous"}</p>
 
-        <button onClick={googleLogin} disabled={loading} style={{width:"100%",padding:"12px",borderRadius:10,border:"1px solid #333",background:"#0d0d20",color:"#f0f0f0",fontSize:14,fontWeight:600,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:20}}>
-          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-          {loading?"Connexion...":"Continuer avec Google"}
-        </button>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}><div style={{flex:1,height:1,background:"#222"}}/><span style={{color:"#555",fontSize:11}}>ou par email</span><div style={{flex:1,height:1,background:"#222"}}/></div>
+        {mode!=="forgot"&&<>
+          <button onClick={googleLogin} disabled={loading} style={{width:"100%",padding:"12px",borderRadius:10,border:"1px solid #333",background:"#0d0d20",color:"#f0f0f0",fontSize:14,fontWeight:600,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:20}}>
+            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            {loading?"Connexion...":"Continuer avec Google"}
+          </button>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}><div style={{flex:1,height:1,background:"#222"}}/><span style={{color:"#555",fontSize:11}}>ou par email</span><div style={{flex:1,height:1,background:"#222"}}/></div>
+        </>}
 
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Email</label>
-          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("")}} placeholder="votre@email.com" style={{...S.inp,borderColor:email&&!emailOk?"#f87171":email&&emailOk?"#4ade80":"#333"}}/>
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");setInfoMsg("")}} placeholder="votre@email.com" style={{...S.inp,borderColor:email&&!emailOk?"#f87171":email&&emailOk?"#4ade80":"#333"}} onKeyDown={e=>e.key==="Enter"&&mode==="forgot"&&submit()}/>
           {email&&!emailOk&&<div style={{fontSize:10,color:"#f87171",marginTop:4}}>Format email invalide</div>}
         </div>
-        <div style={{marginBottom:6}}>
+        {mode!=="forgot"&&<div style={{marginBottom:6}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Mot de passe</label>
           <input type="password" value={pass} onChange={e=>{setPass(e.target.value);setError("")}} placeholder="••••••••" style={{...S.inp,borderColor:pass&&!passOk?"#f87171":pass&&passOk?"#4ade80":"#333"}} onKeyDown={e=>e.key==="Enter"&&submit()}/>
-        </div>
+          {mode==="login"&&<div style={{textAlign:"right",marginTop:6}}>
+            <span onClick={()=>{setMode("forgot");setPass("");setError("");setInfoMsg("")}} style={{color:"#60a5fa",cursor:"pointer",fontSize:11,fontWeight:600}}>Mot de passe oublié ?</span>
+          </div>}
+        </div>}
         {mode==="register"&&pass.length>0&&(
           <div style={{marginTop:6,marginBottom:6}}>
             <div style={{display:"flex",gap:3,marginBottom:6}}>
@@ -85,17 +105,98 @@ function AuthScreen({onAuth}){
           </div>
         )}
         {error&&<div style={{fontSize:11,color:"#f87171",marginBottom:8,padding:"6px 10px",background:"#f8717111",borderRadius:6}}>{error}</div>}
+        {infoMsg&&<div style={{fontSize:11,color:"#4ade80",marginBottom:8,padding:"8px 12px",background:"#4ade8015",border:"1px solid #4ade8055",borderRadius:6}}>✓ {infoMsg}</div>}
         <div style={{marginBottom:16}}/>
 
         <button onClick={submit} disabled={!canSubmit||loading} style={S.btn(canSubmit,"#3b82f6")}>
-          {loading?"Connexion...":mode==="register"?"Créer mon compte":"Se connecter"}
+          {loading?(mode==="forgot"?"Envoi...":"Connexion..."):mode==="register"?"Créer mon compte":mode==="forgot"?"Envoyer le lien":"Se connecter"}
         </button>
         <p style={{textAlign:"center",marginTop:20,fontSize:12,color:"#666"}}>
-          {mode==="register"?"Déjà un compte ? ":"Pas encore de compte ? "}
-          <span onClick={()=>{setMode(mode==="register"?"login":"register");setPass("");setError("")}} style={{color:"#60a5fa",cursor:"pointer",fontWeight:600}}>
-            {mode==="register"?"Se connecter":"S'inscrire"}
-          </span>
+          {mode==="forgot"?<>
+            <span onClick={()=>{setMode("login");setError("");setInfoMsg("")}} style={{color:"#60a5fa",cursor:"pointer",fontWeight:600}}>← Retour à la connexion</span>
+          </>:<>
+            {mode==="register"?"Déjà un compte ? ":"Pas encore de compte ? "}
+            <span onClick={()=>{setMode(mode==="register"?"login":"register");setPass("");setError("");setInfoMsg("")}} style={{color:"#60a5fa",cursor:"pointer",fontWeight:600}}>
+              {mode==="register"?"Se connecter":"S'inscrire"}
+            </span>
+          </>}
         </p>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   RESET PASSWORD SCREEN (via lien email recovery)
+   ═══════════════════════════════════════════════ */
+function ResetPasswordScreen({onDone}){
+  const[pass,setPass]=useState("");
+  const[pass2,setPass2]=useState("");
+  const[loading,setLoading]=useState(false);
+  const[error,setError]=useState("");
+  const[success,setSuccess]=useState(false);
+
+  const rules=[{ok:pass.length>=8,l:"8 car."},{ok:/[A-Z]/.test(pass),l:"1 maj."},{ok:/[a-z]/.test(pass),l:"1 min."},{ok:/[0-9]/.test(pass),l:"1 chiffre"},{ok:/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pass),l:"1 symbole"}];
+  const passOk=rules.every(r=>r.ok);
+  const matchOk=pass.length>0&&pass===pass2;
+  const canSubmit=passOk&&matchOk;
+
+  const submit=async()=>{
+    if(!canSubmit)return;
+    setLoading(true);setError("");
+    try{
+      const{error:e}=await supabase.auth.updateUser({password:pass});
+      if(e)throw e;
+      await supabase.auth.signOut();
+      setSuccess(true);
+      setTimeout(()=>onDone(),1500);
+    }catch(e){setError(e.message);setLoading(false)}
+  };
+
+  if(success)return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
+      <div style={{width:"100%",maxWidth:360,textAlign:"center"}}>
+        <div style={{fontSize:48,marginBottom:16}}>✓</div>
+        <h2 style={{fontSize:20,fontWeight:800,color:"#4ade80",marginBottom:8}}>Mot de passe mis à jour</h2>
+        <p style={{color:"#888",fontSize:13}}>Redirection vers la connexion...</p>
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
+      <div style={{width:"100%",maxWidth:360}}>
+        <div style={{textAlign:"center",marginBottom:32}}>
+          <div style={{width:64,height:64,borderRadius:16,background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:28,fontWeight:900,color:"#fff",marginBottom:12}}>P</div>
+          <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 2px",background:"linear-gradient(90deg,#60a5fa,#c084fc)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>Portfolio Tracker</h1>
+        </div>
+        <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:4}}>Nouveau mot de passe</h2>
+        <p style={{color:"#666",fontSize:12,marginBottom:24}}>Choisis ton nouveau mot de passe</p>
+
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Nouveau mot de passe</label>
+          <input type="password" value={pass} onChange={e=>{setPass(e.target.value);setError("")}} placeholder="••••••••" style={{...S.inp,borderColor:pass&&!passOk?"#f87171":pass&&passOk?"#4ade80":"#333"}}/>
+        </div>
+        {pass.length>0&&(
+          <div style={{marginBottom:12}}>
+            <div style={{display:"flex",gap:3,marginBottom:6}}>
+              {[1,2,3,4,5].map(i=>{const f=rules.filter(r=>r.ok).length;return<div key={i} style={{flex:1,height:3,borderRadius:2,background:i<=f?(f<=2?"#f87171":f<=3?"#f59e0b":"#4ade80"):"#222"}}/>})}
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+              {rules.map((r,i)=><span key={i} style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:r.ok?"#4ade8015":"#f8717115",color:r.ok?"#4ade80":"#f87171"}}>{r.ok?"✓":"×"} {r.l}</span>)}
+            </div>
+          </div>
+        )}
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Confirmer</label>
+          <input type="password" value={pass2} onChange={e=>{setPass2(e.target.value);setError("")}} placeholder="••••••••" style={{...S.inp,borderColor:pass2&&!matchOk?"#f87171":matchOk?"#4ade80":"#333"}} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+          {pass2&&!matchOk&&<div style={{fontSize:10,color:"#f87171",marginTop:4}}>Les mots de passe ne correspondent pas</div>}
+        </div>
+        {error&&<div style={{fontSize:11,color:"#f87171",marginBottom:8,padding:"6px 10px",background:"#f8717111",borderRadius:6}}>{error}</div>}
+        <div style={{marginBottom:16}}/>
+        <button onClick={submit} disabled={!canSubmit||loading} style={S.btn(canSubmit,"#3b82f6")}>
+          {loading?"Mise à jour...":"Mettre à jour mon mot de passe"}
+        </button>
       </div>
     </div>
   );
@@ -643,19 +744,33 @@ function Dashboard({user,onLogout}){
 export default function App(){
   const[user,setUser]=useState(null);
   const[loading,setLoading]=useState(true);
+  const[recovery,setRecovery]=useState(false);
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{
       setUser(session?.user||null);
       setLoading(false);
     });
-    const{data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
+    const{data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY"){
+        setRecovery(true);
+        setUser(session?.user||null);
+        return;
+      }
       setUser(session?.user||null);
     });
     return()=>subscription.unsubscribe();
   },[]);
 
   const logout=async()=>{await supabase.auth.signOut();setUser(null)};
+  const finishReset=()=>{
+    setRecovery(false);
+    setUser(null);
+    // nettoie le hash/query de l'URL après reset
+    if(window.history&&window.history.replaceState){
+      window.history.replaceState(null,"",window.location.pathname);
+    }
+  };
 
   if(loading)return(
     <div style={{...S.page,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -670,7 +785,7 @@ export default function App(){
     <div style={S.page}>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
       <style>{`*{box-sizing:border-box;margin:0;padding:0}input,button{font-family:inherit}::selection{background:#3b82f644}body{background:#09091a}`}</style>
-      {user?<Dashboard user={user} onLogout={logout}/>:<AuthScreen onAuth={setUser}/>}
+      {recovery?<ResetPasswordScreen onDone={finishReset}/>:user?<Dashboard user={user} onLogout={logout}/>:<AuthScreen onAuth={setUser}/>}
     </div>
   );
 }
