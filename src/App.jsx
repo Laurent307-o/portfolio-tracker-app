@@ -1,4 +1,4 @@
-import{useState,useEffect,useCallback}from"react";
+import{useState,useEffect,useCallback,useRef}from"react";
 import{supabase}from"./supabaseClient";
 
 /* ── helpers ── */
@@ -163,7 +163,200 @@ function AddPortfolio({user,onCreated}){
 }
 
 /* ═══════════════════════════════════════════════
-   ADD POSITION SCREEN
+   CHOIX MÉTHODE : Scanner ou Manuel  (Sprint 2)
+   ═══════════════════════════════════════════════ */
+function AddPositionChoice({portfolio,onPick,onBack}){
+  const Opt=({icon,title,desc,badge,onClick,color})=>(
+    <div onClick={onClick} style={{...S.card,cursor:"pointer",border:`1px solid ${color}44`,marginBottom:12,transition:"all 0.2s"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14}}>
+        <div style={{width:48,height:48,borderRadius:12,background:`${color}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,flexShrink:0}}>{icon}</div>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+            <span style={{fontSize:15,fontWeight:800,color:"#f0f0f0"}}>{title}</span>
+            {badge&&<span style={{fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:`${color}33`,color}}>{badge}</span>}
+          </div>
+          <div style={{fontSize:11,color:"#888"}}>{desc}</div>
+        </div>
+        <div style={{color:color,fontSize:20,fontWeight:300}}>›</div>
+      </div>
+    </div>
+  );
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
+      <div style={{width:"100%",maxWidth:420}}>
+        <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
+        <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>Ajouter des positions</h2>
+        <p style={{color:"#666",fontSize:12,marginBottom:20}}>dans <span style={{color:portfolio.color,fontWeight:700}}>{portfolio.name}</span></p>
+        <Opt icon="📸" title="Scanner une capture d'écran" desc="Upload d'une ou plusieurs photos de ton courtier, IA extraction automatique" badge="IA" color="#8b5cf6" onClick={()=>onPick("scan")}/>
+        <Opt icon="✍️" title="Saisir manuellement" desc="Formulaire classique (ISIN, quantité, PRU)" color="#3b82f6" onClick={()=>onPick("manual")}/>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   SCAN SCREEN — upload multi-photos + appel /api/scan
+   ═══════════════════════════════════════════════ */
+function ScanScreen({user,portfolio,onExtracted,onBack}){
+  const[files,setFiles]=useState([]); // [{id, dataUrl, name, size}]
+  const[loading,setLoading]=useState(false);
+  const[error,setError]=useState("");
+  const inputRef=useRef(null);
+
+  const handleFiles=async(list)=>{
+    setError("");
+    const arr=Array.from(list||[]);
+    if(files.length+arr.length>8){setError("Max 8 photos par scan");return}
+    const next=[];
+    for(const f of arr){
+      if(!f.type.startsWith("image/")){setError("Fichier non image ignoré");continue}
+      if(f.size>5*1024*1024){setError(`${f.name} trop volumineux (max 5 Mo)`);continue}
+      const dataUrl=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});
+      next.push({id:Math.random().toString(36).slice(2),dataUrl,name:f.name,size:f.size});
+    }
+    setFiles(f=>[...f,...next]);
+  };
+
+  const remove=(id)=>setFiles(f=>f.filter(x=>x.id!==id));
+
+  const scan=async()=>{
+    if(!files.length)return;
+    setLoading(true);setError("");
+    try{
+      const r=await fetch("/api/scan",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({images:files.map(f=>f.dataUrl)})
+      });
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||"Erreur serveur");
+      if(!d.positions?.length){setError("Aucune position détectée. Vérifie que les captures sont lisibles.");setLoading(false);return}
+      onExtracted(d.positions);
+    }catch(e){setError(e.message);setLoading(false)}
+  };
+
+  return(
+    <div style={{maxWidth:500,margin:"0 auto",padding:"24px 16px 80px"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
+      <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>📸 Scanner tes positions</h2>
+      <p style={{color:"#666",fontSize:12,marginBottom:20}}>Jusqu'à 8 captures d'écran de ton courtier — L'IA extrait ISIN, nom, quantité, PRU.</p>
+
+      {/* Zone d'upload */}
+      <label htmlFor="scan-input" style={{display:"block",cursor:"pointer"}}>
+        <div style={{...S.card,border:"2px dashed #8b5cf644",textAlign:"center",padding:"32px 16px",marginBottom:16,background:"#8b5cf608"}}>
+          <div style={{fontSize:36,marginBottom:8}}>📤</div>
+          <div style={{fontSize:14,fontWeight:700,color:"#c4b5fd",marginBottom:4}}>Ajouter des captures d'écran</div>
+          <div style={{fontSize:11,color:"#666"}}>PNG, JPG — max 5 Mo / photo — max 8 photos</div>
+        </div>
+      </label>
+      <input ref={inputRef} id="scan-input" type="file" accept="image/*" multiple capture="environment" onChange={e=>handleFiles(e.target.files)} style={{display:"none"}}/>
+
+      {/* Previews */}
+      {files.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(90px,1fr))",gap:8,marginBottom:16}}>
+          {files.map(f=>(
+            <div key={f.id} style={{position:"relative",aspectRatio:"1",borderRadius:10,overflow:"hidden",border:"1px solid #333",background:"#0d0d20"}}>
+              <img src={f.dataUrl} alt={f.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              <button onClick={()=>remove(f.id)} style={{position:"absolute",top:4,right:4,width:22,height:22,borderRadius:11,border:"none",background:"#000a",color:"#fff",fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {error&&<div style={{fontSize:11,color:"#f87171",marginBottom:12,padding:"8px 12px",background:"#f8717111",borderRadius:8}}>{error}</div>}
+
+      <button onClick={scan} disabled={!files.length||loading} style={S.btn(files.length>0&&!loading,"#8b5cf6")}>
+        {loading?"🤖 Analyse en cours (~10-20s)...":`Lancer le scan (${files.length})`}
+      </button>
+
+      <p style={{fontSize:10,color:"#555",textAlign:"center",marginTop:14}}>Tes images sont envoyées à Claude (Anthropic) pour extraction puis supprimées — elles ne sont pas stockées.</p>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   REVIEW SCREEN — validation/édition avant insertion
+   ═══════════════════════════════════════════════ */
+function ReviewScreen({user,portfolio,extracted,onDone,onBack}){
+  const[rows,setRows]=useState(()=>extracted.map((p,i)=>({
+    id:i,
+    keep:true,
+    isin:p.isin||"",
+    name:p.name||"",
+    ticker:p.ticker||"",
+    quantity:p.quantity!=null?String(p.quantity):"",
+    pru:p.pru!=null?String(p.pru):"",
+  })));
+  const[saving,setSaving]=useState(false);
+  const[error,setError]=useState("");
+
+  const upd=(id,field,val)=>setRows(rs=>rs.map(r=>r.id===id?{...r,[field]:val}:r));
+  const valid=r=>r.keep&&r.isin.length>=10&&r.name&&Number(r.quantity)>0&&Number(r.pru)>0;
+  const kept=rows.filter(r=>r.keep);
+  const allValid=kept.length>0&&kept.every(valid);
+
+  const save=async()=>{
+    if(!allValid)return;
+    setSaving(true);setError("");
+    const payload=kept.map(r=>({
+      portfolio_id:portfolio.id,
+      user_id:user.id,
+      isin:r.isin.toUpperCase().trim(),
+      name:r.name.trim(),
+      ticker:r.ticker||null,
+      quantity:Number(r.quantity),
+      pru:Number(r.pru),
+      first_buy_date:new Date().toISOString().split("T")[0]
+    }));
+    const{error:e}=await supabase.from("positions").insert(payload);
+    setSaving(false);
+    if(e){setError(e.message)}else{onDone(payload.length)}
+  };
+
+  return(
+    <div style={{maxWidth:640,margin:"0 auto",padding:"24px 16px 80px"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
+      <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>✓ Vérifier les positions</h2>
+      <p style={{color:"#666",fontSize:12,marginBottom:20}}>{rows.length} positions extraites — Décoche, corrige, puis confirme pour ajouter à <span style={{color:portfolio.color,fontWeight:700}}>{portfolio.name}</span>.</p>
+
+      {rows.map(r=>(
+        <div key={r.id} style={{...S.card,marginBottom:10,padding:14,opacity:r.keep?1:0.45,border:`1px solid ${r.keep?(valid(r)?"#4ade8033":"#f5970033"):"#33333355"}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <input type="checkbox" checked={r.keep} onChange={e=>upd(r.id,"keep",e.target.checked)} style={{width:18,height:18,accentColor:portfolio.color,cursor:"pointer"}}/>
+            <input value={r.name} onChange={e=>upd(r.id,"name",e.target.value)} placeholder="Nom du titre" style={{...S.inp,padding:"8px 12px",fontSize:13,fontWeight:700}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1.4fr 0.8fr 0.8fr",gap:8}}>
+            <div>
+              <label style={{fontSize:9,color:"#555",textTransform:"uppercase"}}>ISIN</label>
+              <input value={r.isin} onChange={e=>upd(r.id,"isin",e.target.value.toUpperCase())} style={{...S.inp,padding:"6px 10px",fontSize:11,fontFamily:"monospace"}}/>
+            </div>
+            <div>
+              <label style={{fontSize:9,color:"#555",textTransform:"uppercase"}}>Quantité</label>
+              <input type="number" value={r.quantity} onChange={e=>upd(r.id,"quantity",e.target.value)} style={{...S.inp,padding:"6px 10px",fontSize:12}}/>
+            </div>
+            <div>
+              <label style={{fontSize:9,color:"#555",textTransform:"uppercase"}}>PRU (€)</label>
+              <input type="number" step="0.01" value={r.pru} onChange={e=>upd(r.id,"pru",e.target.value)} style={{...S.inp,padding:"6px 10px",fontSize:12}}/>
+            </div>
+          </div>
+          {r.keep&&!valid(r)&&<div style={{fontSize:10,color:"#f59e0b",marginTop:6}}>⚠ Champs invalides ou manquants</div>}
+          {r.ticker&&<div style={{fontSize:9,color:"#4ade80",marginTop:6}}>✓ Ticker Yahoo reconnu : {r.ticker}</div>}
+        </div>
+      ))}
+
+      {error&&<div style={{fontSize:11,color:"#f87171",marginBottom:12,padding:"8px 12px",background:"#f8717111",borderRadius:8}}>{error}</div>}
+
+      <div style={{position:"sticky",bottom:0,background:"linear-gradient(to top,#09091a,#09091aee 70%,transparent)",padding:"16px 0",marginTop:16}}>
+        <button onClick={save} disabled={!allValid||saving} style={S.btn(allValid&&!saving,portfolio.color)}>
+          {saving?"Enregistrement...":`Confirmer ${kept.length} position${kept.length>1?"s":""}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   ADD POSITION SCREEN (saisie manuelle)
    ═══════════════════════════════════════════════ */
 function AddPosition({user,portfolio,onAdded,onBack}){
   const[isin,setIsin]=useState("");
@@ -234,9 +427,11 @@ function Dashboard({user,onLogout}){
   const[positions,setPositions]=useState([]);
   const[prices,setPrices]=useState({});
   const[loading,setLoading]=useState(true);
-  const[screen,setScreen]=useState("dash"); // dash | addPort | addPos
+  const[screen,setScreen]=useState("dash"); // dash | addPort | choice | scan | review | manual
   const[selPort,setSelPort]=useState(null);
-  const[tab,setTab]=useState("synth"); // synth | positions
+  const[extracted,setExtracted]=useState([]);
+  const[tab,setTab]=useState("synth");
+  const[toast,setToast]=useState("");
 
   const load=useCallback(async()=>{
     setLoading(true);
@@ -246,7 +441,6 @@ function Dashboard({user,onLogout}){
     ]);
     setPortfolios(p||[]);
     setPositions(pos||[]);
-    // fetch prices
     const tickers=[...new Set((pos||[]).map(p=>p.ticker).filter(Boolean))];
     if(tickers.length){
       try{
@@ -260,14 +454,15 @@ function Dashboard({user,onLogout}){
 
   useEffect(()=>{load()},[load]);
 
-  if(screen==="addPort")return<AddPortfolio user={user} onCreated={p=>{setScreen("dash");load()}}/>;
-  if(screen==="addPos"&&selPort)return<AddPosition user={user} portfolio={selPort} onAdded={()=>{setScreen("dash");load()}} onBack={()=>setScreen("dash")}/>;
+  const showToast=(m)=>{setToast(m);setTimeout(()=>setToast(""),3500)};
 
-  // Compute values
-  const getPrice=(pos)=>{
-    const p=prices[pos.ticker];
-    return p?.price||pos.current_price||pos.pru;
-  };
+  if(screen==="addPort")return<AddPortfolio user={user} onCreated={()=>{setScreen("dash");load()}}/>;
+  if(screen==="choice"&&selPort)return<AddPositionChoice portfolio={selPort} onBack={()=>setScreen("dash")} onPick={m=>setScreen(m==="scan"?"scan":"manual")}/>;
+  if(screen==="scan"&&selPort)return<ScanScreen user={user} portfolio={selPort} onBack={()=>setScreen("choice")} onExtracted={list=>{setExtracted(list);setScreen("review")}}/>;
+  if(screen==="review"&&selPort)return<ReviewScreen user={user} portfolio={selPort} extracted={extracted} onBack={()=>setScreen("scan")} onDone={n=>{setScreen("dash");load();showToast(`${n} position${n>1?"s":""} ajoutée${n>1?"s":""} ✓`)}}/>;
+  if(screen==="manual"&&selPort)return<AddPosition user={user} portfolio={selPort} onAdded={()=>{setScreen("dash");load()}} onBack={()=>setScreen("choice")}/>;
+
+  const getPrice=(pos)=>{const p=prices[pos.ticker];return p?.price||pos.current_price||pos.pru};
 
   const portData=portfolios.map(port=>{
     const poss=positions.filter(p=>p.portfolio_id===port.id);
@@ -294,6 +489,7 @@ function Dashboard({user,onLogout}){
   return(
     <div style={{maxWidth:800,margin:"0 auto",padding:"16px 16px 80px"}}>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+      {toast&&<div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",background:"#4ade80",color:"#0a0a1a",padding:"10px 20px",borderRadius:10,fontWeight:700,fontSize:13,zIndex:100,boxShadow:"0 8px 30px #4ade8055"}}>{toast}</div>}
       {/* Header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <div>
@@ -351,7 +547,7 @@ function Dashboard({user,onLogout}){
                 <div style={{background:"#0d0d20",borderRadius:8,padding:"6px 10px"}}><div style={{fontSize:8,color:"#555"}}>PERF.</div><div style={{fontSize:13,fontWeight:700,color:port.pv>=0?"#4ade80":"#f87171"}}>{port.pvPct>=0?"+":""}{port.pvPct.toFixed(2)}%</div></div>
               </div>
               <div style={{marginTop:10,display:"flex",gap:6}}>
-                <button onClick={()=>{setSelPort(port);setScreen("addPos")}} style={{padding:"6px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit",background:port.color+"22",color:port.color}}>+ Position</button>
+                <button onClick={()=>{setSelPort(port);setScreen("choice")}} style={{padding:"6px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit",background:port.color+"22",color:port.color}}>+ Position</button>
               </div>
             </div>
           ))}
