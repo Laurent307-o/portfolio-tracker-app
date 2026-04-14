@@ -16,6 +16,11 @@ const ISIN_TO_TICKER = {
   "IE000I8KRLL9": "SEME.PA",
 };
 
+// Mapping inverse ticker → ISIN pour préremplissage après lookup Yahoo
+const TICKER_TO_ISIN = Object.fromEntries(
+  Object.entries(ISIN_TO_TICKER).map(([isin, t]) => [t.toUpperCase(), isin])
+);
+
 const SYSTEM_PROMPT = `Tu es un assistant d'extraction de données financières. Tu reçois une ou plusieurs captures d'écran d'un portefeuille boursier (Fortuneo, Boursorama, Bourse Direct, Saxo, Degiro, etc.).
 
 Ta tâche : extraire TOUTES les positions (titres détenus) visibles sur les captures.
@@ -173,15 +178,19 @@ export default async function handler(req, res) {
 
       // Pas d'ISIN → Yahoo lookup
       const lookup = await yahooLookup(name);
+      const suggestedTicker = lookup?.ticker || null;
+      const suggestedIsin = suggestedTicker ? (TICKER_TO_ISIN[suggestedTicker.toUpperCase()] || null) : null;
       return {
-        isin: null,
+        isin: suggestedIsin,
         name,
         quantity,
         pru,
-        ticker: lookup?.ticker || null,
+        ticker: suggestedTicker,
         suggestedName: lookup?.matchedName || null,
         needsVerification: true,
-        warning: "ISIN non présent dans votre capture, vous devez vérifier",
+        warning: suggestedIsin
+          ? "ISIN non présent sur la capture : ISIN suggéré - à confirmer"
+          : "ISIN non présent sur la capture : aucun ISIN connu pour ce ticker - merci de saisir manuellement",
       };
     }));
 
