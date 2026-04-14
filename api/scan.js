@@ -180,6 +180,20 @@ export default async function handler(req, res) {
       const lookup = await yahooLookup(name);
       const suggestedTicker = lookup?.ticker || null;
       const suggestedIsin = suggestedTicker ? (TICKER_TO_ISIN[suggestedTicker.toUpperCase()] || null) : null;
+
+      // 3 cas distincts pour guider l'utilisateur
+      let warning;
+      if (suggestedIsin) {
+        // Cas 1 : Yahoo a trouvé + on a l'ISIN dans notre table
+        warning = "ISIN non présent sur la capture : ISIN suggéré - à confirmer";
+      } else if (suggestedTicker) {
+        // Cas 2 : Yahoo a trouvé un ticker mais on n'a pas l'ISIN mappé
+        warning = `Ticker trouvé (${suggestedTicker}) mais ISIN inconnu - merci de saisir l'ISIN manuellement (indispensable pour la mise à jour des cours)`;
+      } else {
+        // Cas 3 : Yahoo n'a rien trouvé
+        warning = "Titre introuvable sur Yahoo Finance - merci de saisir l'ISIN manuellement (indispensable pour la mise à jour des cours)";
+      }
+
       return {
         isin: suggestedIsin,
         name,
@@ -188,9 +202,7 @@ export default async function handler(req, res) {
         ticker: suggestedTicker,
         suggestedName: lookup?.matchedName || null,
         needsVerification: true,
-        warning: suggestedIsin
-          ? "ISIN non présent sur la capture : ISIN suggéré - à confirmer"
-          : "ISIN non présent sur la capture : aucun ISIN connu pour ce ticker - merci de saisir manuellement",
+        warning,
       };
     }));
 
