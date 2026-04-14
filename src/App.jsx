@@ -564,6 +564,16 @@ function AddPosition({user,portfolio,onAdded,onBack}){
 /* ═══════════════════════════════════════════════
    PROFILE SCREEN — gestion du compte (Sprint 2)
    ═══════════════════════════════════════════════ */
+function ProfileSection({title,desc,children}){
+  return(
+    <div style={{...S.card,marginBottom:16}}>
+      <h3 style={{fontSize:14,fontWeight:800,color:"#f0f0f0",marginBottom:4}}>{title}</h3>
+      {desc&&<p style={{fontSize:11,color:"#666",marginBottom:14}}>{desc}</p>}
+      {children}
+    </div>
+  );
+}
+
 function ProfileScreen({user,onBack,onLoggedOut}){
   const[profile,setProfile]=useState(null);
   const[loading,setLoading]=useState(true);
@@ -651,14 +661,6 @@ function ProfileScreen({user,onBack,onLoggedOut}){
   const plan=profile?.plan||"free";
   const isPremium=plan==="premium";
 
-  const Section=({title,desc,children})=>(
-    <div style={{...S.card,marginBottom:16}}>
-      <h3 style={{fontSize:14,fontWeight:800,color:"#f0f0f0",marginBottom:4}}>{title}</h3>
-      {desc&&<p style={{fontSize:11,color:"#666",marginBottom:14}}>{desc}</p>}
-      {children}
-    </div>
-  );
-
   return(
     <div style={{maxWidth:560,margin:"0 auto",padding:"24px 16px 80px"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
@@ -666,7 +668,7 @@ function ProfileScreen({user,onBack,onLoggedOut}){
       <p style={{color:"#666",fontSize:12,marginBottom:24}}>Gérez votre compte et vos préférences</p>
 
       {/* IDENTITÉ */}
-      <Section title="Identité" desc="Votre adresse email sert à vous connecter et recevoir les notifications.">
+      <ProfileSection title="Identité" desc="Votre adresse email sert à vous connecter et recevoir les notifications.">
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Email actuel</label>
           <div style={{...S.inp,background:"#0a0a18",color:"#888",userSelect:"text"}}>{user.email}</div>
@@ -681,10 +683,10 @@ function ProfileScreen({user,onBack,onLoggedOut}){
         <button onClick={changeEmail} disabled={!emailOk||newEmail===user.email||emailLoading} style={S.btn(emailOk&&newEmail!==user.email&&!emailLoading,"#3b82f6")}>
           {emailLoading?"Envoi...":"Changer mon adresse email"}
         </button>
-      </Section>
+      </ProfileSection>
 
       {/* PLAN */}
-      <Section title="Mon abonnement">
+      <ProfileSection title="Mon abonnement">
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 14px",background:"#0d0d20",borderRadius:10,border:`1px solid ${isPremium?"#f59e0b55":"#33333355"}`}}>
           <div>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
@@ -695,10 +697,10 @@ function ProfileScreen({user,onBack,onLoggedOut}){
           </div>
           {!isPremium&&<button style={{padding:"8px 14px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",background:"linear-gradient(135deg,#f59e0b,#ef4444)",color:"#fff"}}>Passer premium</button>}
         </div>
-      </Section>
+      </ProfileSection>
 
       {/* SÉCURITÉ */}
-      <Section title="Sécurité" desc="Changez votre mot de passe. Vous devez saisir votre mot de passe actuel pour confirmer votre identité.">
+      <ProfileSection title="Sécurité" desc="Changez votre mot de passe. Vous devez saisir votre mot de passe actuel pour confirmer votre identité.">
         <div style={{marginBottom:12}}>
           <label style={{fontSize:11,color:"#888",marginBottom:4,display:"block"}}>Mot de passe actuel</label>
           <input type="password" value={curPass} onChange={e=>{setCurPass(e.target.value);setPwdErr("");setPwdMsg("")}} placeholder="••••••••" style={S.inp}/>
@@ -727,7 +729,7 @@ function ProfileScreen({user,onBack,onLoggedOut}){
         <button onClick={changePwd} disabled={!canChangePwd||pwdLoading} style={S.btn(canChangePwd&&!pwdLoading,"#3b82f6")}>
           {pwdLoading?"Mise à jour...":"Mettre à jour mon mot de passe"}
         </button>
-      </Section>
+      </ProfileSection>
 
       {/* ZONE DANGER */}
       <div style={{...S.card,marginBottom:16,border:"1px solid #f8717144"}}>
