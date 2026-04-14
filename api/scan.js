@@ -21,6 +21,29 @@ const TICKER_TO_ISIN = Object.fromEntries(
   Object.entries(ISIN_TO_TICKER).map(([isin, t]) => [t.toUpperCase(), isin])
 );
 
+// Fallback par mots-clés du nom (utile quand Yahoo retourne un ticker d'une autre bourse)
+// L'ordre compte : les règles plus spécifiques doivent être en premier.
+const NAME_KEYWORDS_TO_ISIN = [
+  { match: /amundi.*stoxx.*europe.*600.*tech/i, isin: "LU1834988518", ticker: "TNO.PA" },
+  { match: /amundi.*dax/i,                      isin: "LU0252633754", ticker: "DAX.PA" },
+  { match: /amundi.*pea.*emergent|amundi.*msci.*emerging/i, isin: "FR0013412020", ticker: "PAEEM.PA" },
+  { match: /amundi.*pea.*nasdaq.*100|amundi.*nasdaq.*100/i,  isin: "FR0011871110", ticker: "PUST.PA" },
+  { match: /amundi.*pea.*s.*p.*500|amundi.*s.*p.*500/i,      isin: "FR0011871136", ticker: "PSPH.PA" },
+  { match: /amundi.*semi|amundi.*chip/i,        isin: "LU1900066033", ticker: "CHIP.PA" },
+  { match: /ishares.*euro.*stoxx.*50|ishares.*core.*euro.*stoxx/i, isin: "IE00B53L3W79", ticker: "CSX5.AS" },
+  { match: /vaneck.*def|defense.*etf/i,         isin: "IE000YYE6WK5", ticker: "DFNS.PA" },
+  { match: /amundi.*esg.*emerg|emerging.*ex.*china/i, isin: "IE000I8KRLL9", ticker: "SEME.PA" },
+  { match: /^thales|thales\s|thales$/i,         isin: "FR0000121329", ticker: "HO.PA" },
+  { match: /bnp\s*paribas/i,                    isin: "FR0000131104", ticker: "BNP.PA" },
+];
+
+function matchByName(name) {
+  for (const rule of NAME_KEYWORDS_TO_ISIN) {
+    if (rule.match.test(name)) return { isin: rule.isin, ticker: rule.ticker };
+  }
+  return null;
+}
+
 const SYSTEM_PROMPT = `Tu es un assistant d'extraction de données financières. Tu reçois une ou plusieurs captures d'écran d'un portefeuille boursier (Fortuneo, Boursorama, Bourse Direct, Saxo, Degiro, etc.).
 
 Ta tâche : extraire TOUTES les positions (titres détenus) visibles sur les captures.
@@ -176,10 +199,22 @@ export default async function handler(req, res) {
         };
       }
 
-      // Pas d'ISIN → Yahoo lookup
-      const lookup = await yahooLookup(name);
-      const suggestedTicker = lookup?.ticker || null;
-      const suggestedIsin = suggestedTicker ? (TICKER_TO_ISIN[suggestedTicker.toUpperCase()] || null) : null;
+      // Pas d'ISIN → D'abord fallback par mots-clés du nom (plus fiable pour les Amundi ETF PEA)
+      const nameMatch = matchByName(name);
+      let suggestedTicker = null;
+      let suggestedIsin = null;
+      let suggestedDisplayName = null;
+
+      if (nameMatch) {
+        suggestedTicker = nameMatch.ticker;
+        suggestedIsin = nameMatch.isin;
+      } else {
+        // Sinon Yahoo lookup
+        const lookup = await yahooLookup(name);
+        suggestedTicker = lookup?.ticker || null;
+        suggestedIsin = suggestedTicker ? (TICKER_TO_ISIN[suggestedTicker.toUpperCase()] || null) : null;
+        suggestedDisplayName = lookup?.matchedName || null;
+      }
 
       // 3 cas distincts pour guider l'utilisateur
       let warning;
@@ -200,7 +235,7 @@ export default async function handler(req, res) {
         quantity,
         pru,
         ticker: suggestedTicker,
-        suggestedName: lookup?.matchedName || null,
+        suggestedName: suggestedDisplayName,
         needsVerification: true,
         warning,
       };
