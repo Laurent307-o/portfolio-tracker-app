@@ -10,6 +10,158 @@ inp:{background:"#0d0d20",border:"1px solid #333",borderRadius:10,padding:"12px 
 btn:(ok,c="#3b82f6")=>({width:"100%",padding:"13px",borderRadius:10,border:"none",cursor:ok?"pointer":"default",fontSize:15,fontWeight:700,fontFamily:"inherit",background:ok?`linear-gradient(135deg,${c},${c}cc)`:"#222",color:ok?"#fff":"#555",transition:"all 0.3s"}),
 };
 
+/* ── FadeIn util (maquette Sprint 1) ── */
+function FadeIn({children,delay=0}){
+  return(
+    <div style={{animation:`fadeIn 0.5s ${delay}ms both`}}>
+      <style>{`@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      {children}
+    </div>
+  );
+}
+
+/* ── Barre de progression (onboarding Sprint 1) ── */
+function ProgressBar({pct}){
+  return(
+    <div style={{position:"fixed",top:0,left:0,right:0,height:3,background:"#12122a",zIndex:10}}>
+      <div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#3b82f6,#c084fc)",transition:"width 0.4s"}}/>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   PLAN CHOICE (Sprint 2 onboarding — repris du Sprint 1)
+   ═══════════════════════════════════════════════ */
+function PlanChoiceScreen({user,onDone,onSkip}){
+  const[selected,setSelected]=useState(null);
+  const[billing,setBilling]=useState("annual");
+  const[loading,setLoading]=useState(false);
+  const price=billing==="annual"?"30 €":"2,99 €";
+  const period=billing==="annual"?"/an":"/mois";
+
+  const validate=async()=>{
+    if(!selected)return;
+    setLoading(true);
+    const plan=selected==="premium"?"premium":"free";
+    const trialDays=selected==="premium"?(billing==="annual"?15:7):7;
+    const trialStart=new Date().toISOString();
+    const trialEnd=new Date(Date.now()+trialDays*86400000).toISOString();
+    try{
+      await supabase.from("profiles").upsert({
+        id:user.id,
+        email:user.email,
+        plan,
+        billing_cycle:selected==="premium"?billing:null,
+        trial_started_at:trialStart,
+        plan_expires_at:trialEnd,
+        updated_at:new Date().toISOString()
+      },{onConflict:"id"});
+    }catch(e){console.error("Plan save error",e);}
+    setLoading(false);
+    onDone({plan,billing,trialDays});
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
+      <ProgressBar pct={25}/>
+      <FadeIn>
+        <h2 style={{fontSize:22,fontWeight:800,color:"#f0f0f0",marginBottom:4,textAlign:"center"}}>Choisissez votre formule</h2>
+        <p style={{color:"#666",fontSize:12,marginBottom:20,textAlign:"center"}}>Changez d'avis à tout moment</p>
+      </FadeIn>
+
+      <FadeIn delay={100}>
+        <div style={{display:"flex",background:"#12122a",borderRadius:10,padding:3,marginBottom:20,border:"1px solid #ffffff11"}}>
+          {[["monthly","Mensuel"],["annual","Annuel"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setBilling(v)} style={{padding:"8px 20px",borderRadius:8,border:"none",cursor:"pointer",fontSize:12,fontWeight:700,fontFamily:"inherit",background:billing===v?"linear-gradient(135deg,#8b5cf6,#c084fc)":"transparent",color:billing===v?"#fff":"#666",transition:"all 0.3s",position:"relative"}}>
+              {l}
+              {v==="annual"&&<span style={{position:"absolute",top:-10,right:-10,fontSize:10,color:"#0a2e1a",fontWeight:800,background:"#4ade80",padding:"3px 9px",borderRadius:999,boxShadow:"0 2px 8px #4ade8066"}}>-17%</span>}
+            </button>
+          ))}
+        </div>
+      </FadeIn>
+
+      <div style={{display:"flex",flexDirection:"column",gap:14,width:"100%",maxWidth:380}}>
+        <FadeIn delay={200}>
+          <div onClick={()=>setSelected("free")} style={{background:"#12122a",borderRadius:16,padding:"22px 20px",border:selected==="free"?"2px solid #60a5fa":"2px solid #ffffff11",cursor:"pointer",transition:"all 0.3s",transform:selected==="free"?"scale(1.02)":"scale(1)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:18,fontWeight:800,color:"#f0f0f0"}}>Gratuit</div>
+              <div style={{fontSize:22,fontWeight:800,color:"#60a5fa"}}>0 €</div>
+            </div>
+            <div style={{background:"#3b82f611",border:"1px solid #3b82f633",borderRadius:8,padding:"6px 10px",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:14}}>🎁</span>
+              <span style={{fontSize:11,color:"#60a5fa",fontWeight:600}}>7 jours Premium offerts pour découvrir</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[["✅","1 portefeuille"],["✅","Cours mis à jour quotidiennement"],["✅","Graphiques de performance"],["📢","Publicités affichées"],["❌","Limité à 1 portefeuille"],["❌","Pas de graphiques avancés"],["❌","Pas d'alertes de cours"],["❌","Pas de rapport quotidien"]].map(([ic,t],i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:ic==="❌"?"#666":ic==="📢"?"#f59e0b":"#ccc"}}>
+                  <span style={{fontSize:11,width:18,textAlign:"center"}}>{ic}</span>{t}
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeIn>
+
+        <FadeIn delay={400}>
+          <div onClick={()=>setSelected("premium")} style={{background:selected==="premium"?"linear-gradient(135deg,#12122a,#1a1035)":"#12122a",borderRadius:16,padding:"22px 20px",border:selected==="premium"?"2px solid #c084fc":"2px solid #ffffff11",cursor:"pointer",transition:"all 0.3s",transform:selected==="premium"?"scale(1.02)":"scale(1)",position:"relative",overflow:"hidden"}}>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:6,alignItems:"center",marginBottom:10}}>
+              {billing==="annual"&&<div style={{background:"#4ade80",padding:"3px 10px",fontSize:10,fontWeight:800,color:"#0a2e1a",borderRadius:999,boxShadow:"0 2px 8px #4ade8066"}}>-17%</div>}
+              <div style={{background:"linear-gradient(135deg,#8b5cf6,#c084fc)",padding:"3px 10px",fontSize:10,fontWeight:700,color:"#fff",borderRadius:999}}>Populaire</div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div style={{fontSize:18,fontWeight:800,color:"#f0f0f0"}}>Premium</div>
+              <div><span style={{fontSize:22,fontWeight:800,color:"#c084fc"}}>{price}</span><span style={{fontSize:11,color:"#888"}}>{period}</span></div>
+            </div>
+            {billing==="annual"&&<div style={{fontSize:10,color:"#4ade80",marginBottom:8}}>soit 2,50 €/mois au lieu de 2,99 €</div>}
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {[["✅","Portefeuilles illimités (PEA, CTO, AV, PER...)"],["✅","Cours mis à jour quotidiennement"],["✅","Export CSV / Excel"],["✅","Aucune publicité"]].map(([ic,t],i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#ccc"}}>
+                  <span style={{fontSize:11,width:18,textAlign:"center"}}>{ic}</span>{t}
+                </div>
+              ))}
+              <div style={{borderTop:"1px solid #ffffff11",paddingTop:8,marginTop:2,display:"flex",flexDirection:"column",gap:8}}>
+                {[["⭐","Graphiques avancés (Comparatif, Base 100)"],["⭐","Alertes de cours personnalisées"],["⭐","Rapport quotidien IA"]].map(([ic,t],i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#c4b5fd"}}>
+                    <span style={{fontSize:11,width:18,textAlign:"center"}}>{ic}</span>
+                    <span style={{fontWeight:600}}>{t}</span>
+                    <span style={{fontSize:8,color:"#c4b5fd",background:"#c4b5fd15",padding:"2px 6px",borderRadius:4,fontWeight:700}}>NEW</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Détails alertes + rapport IA (Sprint 1 maquette) */}
+              <div style={{background:"#0d0d20",borderRadius:10,padding:"10px 12px",marginTop:4,border:"1px solid #c4b5fd22"}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#c4b5fd",marginBottom:4}}>🔔 Alertes de cours personnalisées</div>
+                <div style={{fontSize:10,color:"#aaa",lineHeight:1.5,marginBottom:8}}>
+                  Définissez vos seuils sur chaque position<br/>
+                  <span style={{color:"#888"}}>Vérification toutes les heures (9h-22h) · Notification push + email</span>
+                </div>
+                <div style={{fontSize:11,fontWeight:700,color:"#c4b5fd",marginBottom:4}}>📊 Rapport quotidien IA</div>
+                <div style={{fontSize:10,color:"#aaa",lineHeight:1.6}}>
+                  <div style={{marginBottom:6}}>Chaque soir, après la clôture des marchés US, un résumé personnalisé :</div>
+                  <div>• L'actualité de vos positions (alertes, résultats, géopolitique, innovation...)</div>
+                  <div>• Votre TOP 3 et FLOP 3 du jour</div>
+                  <div>• Les événements clés à venir</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </FadeIn>
+      </div>
+
+      <FadeIn delay={600}>
+        <button onClick={validate} disabled={!selected||loading} style={{width:"100%",maxWidth:380,padding:"14px",borderRadius:12,border:"none",cursor:selected?"pointer":"default",fontSize:15,fontWeight:700,fontFamily:"inherit",background:!selected?"#222":selected==="premium"?"linear-gradient(135deg,#8b5cf6,#c084fc)":"linear-gradient(135deg,#3b82f6,#60a5fa)",color:selected?"#fff":"#555",marginTop:20,boxShadow:selected?"0 8px 30px "+(selected==="premium"?"#8b5cf633":"#3b82f633"):"none",transition:"all 0.3s"}}>
+          {loading?"Enregistrement...":!selected?"Sélectionnez une formule":selected==="premium"?(billing==="annual"?"Commencer l'essai gratuit (15 jours)":"Commencer avec 7 jours offerts"):"Commencer avec 7 jours Premium offerts"}
+        </button>
+      </FadeIn>
+      {selected==="free"&&<FadeIn delay={700}><p style={{color:"#888",fontSize:10,marginTop:10,textAlign:"center"}}>7 jours Premium offerts · Puis version gratuite avec publicités</p></FadeIn>}
+      {selected==="premium"&&billing==="annual"&&<FadeIn delay={700}><p style={{color:"#888",fontSize:10,marginTop:10,textAlign:"center"}}>15 jours d'essai gratuit · Engagement 1 an · Annulable avant la fin de l'essai</p></FadeIn>}
+      {selected==="premium"&&billing==="monthly"&&<FadeIn delay={700}><p style={{color:"#888",fontSize:10,marginTop:10,textAlign:"center"}}>7 jours offerts · Sans engagement · Annulable à tout moment</p></FadeIn>}
+
+      <button onClick={onSkip} style={{marginTop:18,background:"none",border:"none",color:"#666",fontSize:12,fontFamily:"inherit",cursor:"pointer",textDecoration:"underline"}}>Passer pour l'instant</button>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════
    AUTH SCREEN
    ═══════════════════════════════════════════════ */
@@ -205,7 +357,7 @@ function ResetPasswordScreen({onDone}){
 /* ═══════════════════════════════════════════════
    ADD PORTFOLIO SCREEN
    ═══════════════════════════════════════════════ */
-function AddPortfolio({user,onCreated}){
+function AddPortfolio({user,onCreated,onboarding}){
   const[name,setName]=useState("");
   const[color,setColor]=useState("#3b82f6");
   const[type,setType]=useState("PEA");
@@ -222,6 +374,7 @@ function AddPortfolio({user,onCreated}){
 
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
+      {onboarding&&<ProgressBar pct={50}/>}
       <div style={{width:"100%",maxWidth:400}}>
         <h2 style={{fontSize:22,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>Créer un portefeuille</h2>
         <p style={{color:"#666",fontSize:12,marginBottom:24}}>Vous pourrez ajouter vos positions ensuite</p>
@@ -266,7 +419,7 @@ function AddPortfolio({user,onCreated}){
 /* ═══════════════════════════════════════════════
    CHOIX MÉTHODE : Scanner ou Manuel  (Sprint 2)
    ═══════════════════════════════════════════════ */
-function AddPositionChoice({portfolio,onPick,onBack}){
+function AddPositionChoice({portfolio,onPick,onBack,onboarding}){
   const Opt=({icon,title,desc,badge,onClick,color})=>(
     <div onClick={onClick} style={{...S.card,cursor:"pointer",border:`1px solid ${color}44`,marginBottom:12,transition:"all 0.2s"}}>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
@@ -284,11 +437,12 @@ function AddPositionChoice({portfolio,onPick,onBack}){
   );
   return(
     <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",padding:24}}>
+      {onboarding&&<ProgressBar pct={75}/>}
       <div style={{width:"100%",maxWidth:420}}>
         <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
         <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>Ajouter des positions</h2>
         <p style={{color:"#666",fontSize:12,marginBottom:20}}>dans <span style={{color:portfolio.color,fontWeight:700}}>{portfolio.name}</span></p>
-        <Opt icon="📸" title="Scanner une capture d'écran" desc="Upload d'une ou plusieurs photos de ton courtier, IA extraction automatique" badge="IA" color="#8b5cf6" onClick={()=>onPick("scan")}/>
+        <Opt icon="📸" title="Scanner votre portefeuille" desc="Upload d'une ou plusieurs photos de ton courtier, IA extraction automatique" badge="IA" color="#8b5cf6" onClick={()=>onPick("scan")}/>
         <Opt icon="✍️" title="Saisir manuellement" desc="Formulaire classique (ISIN, quantité, PRU)" color="#3b82f6" onClick={()=>onPick("manual")}/>
       </div>
     </div>
@@ -339,7 +493,7 @@ function ScanScreen({user,portfolio,onExtracted,onBack}){
   return(
     <div style={{maxWidth:500,margin:"0 auto",padding:"24px 16px 80px"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#666",fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:16}}>← Retour</button>
-      <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>📸 Scanner tes positions</h2>
+      <h2 style={{fontSize:20,fontWeight:800,color:"#f0f0f0",marginBottom:6}}>📸 Scanner votre portefeuille</h2>
       <p style={{color:"#666",fontSize:12,marginBottom:20}}>Jusqu'à 8 captures d'écran de ton courtier — L'IA extrait ISIN, nom, quantité, PRU.</p>
 
       {/* Zone d'upload */}
@@ -616,16 +770,17 @@ function ProfileScreen({user,onBack,onLoggedOut}){
     if(!emailOk||newEmail===user.email)return;
     setEmailLoading(true);setEmailErr("");setEmailMsg("");
     try{
-      // Vérifier/rafraîchir la session avant updateUser
-      const{data:{session}}=await supabase.auth.getSession();
-      if(!session){
-        const{error:rErr}=await supabase.auth.refreshSession();
-        if(rErr){setEmailErr("Session expirée, merci de vous reconnecter.");setEmailLoading(false);return}
-      }
       const{error:e}=await supabase.auth.updateUser({email:newEmail});
-      if(e)throw e;
-      setEmailMsg("Un email de confirmation a été envoyé à votre nouvelle adresse. Cliquez sur le lien pour valider le changement.");
-      setNewEmail("");
+      if(e){
+        if(/session/i.test(e.message)){
+          setEmailErr("Votre session a expiré. Déconnectez-vous puis reconnectez-vous, et réessayez.");
+        }else{
+          throw e;
+        }
+      }else{
+        setEmailMsg("Un email de confirmation a été envoyé à votre nouvelle adresse. Cliquez sur le lien pour valider le changement.");
+        setNewEmail("");
+      }
     }catch(e){setEmailErr(e.message)}
     finally{setEmailLoading(false)}
   };
@@ -775,15 +930,19 @@ function Dashboard({user,onLogout}){
   const[tab,setTab]=useState("synth");
   const[toast,setToast]=useState("");
   const[menuOpen,setMenuOpen]=useState(false);
+  const[profile,setProfile]=useState(null);
+  const[skippedOnb,setSkippedOnb]=useState(false);
 
   const load=useCallback(async()=>{
     setLoading(true);
-    const[{data:p},{data:pos}]=await Promise.all([
+    const[{data:p},{data:pos},{data:prof}]=await Promise.all([
       supabase.from("portfolios").select("*").eq("user_id",user.id).order("created_at"),
-      supabase.from("positions").select("*").eq("user_id",user.id)
+      supabase.from("positions").select("*").eq("user_id",user.id),
+      supabase.from("profiles").select("*").eq("id",user.id).maybeSingle()
     ]);
     setPortfolios(p||[]);
     setPositions(pos||[]);
+    setProfile(prof||null);
     const tickers=[...new Set((pos||[]).map(p=>p.ticker).filter(Boolean))];
     if(tickers.length){
       try{
@@ -799,8 +958,15 @@ function Dashboard({user,onLogout}){
 
   const showToast=(m)=>{setToast(m);setTimeout(()=>setToast(""),3500)};
 
-  if(screen==="addPort")return<AddPortfolio user={user} onCreated={()=>{setScreen("dash");load()}}/>;
-  if(screen==="choice"&&selPort)return<AddPositionChoice portfolio={selPort} onBack={()=>setScreen("dash")} onPick={m=>setScreen(m==="scan"?"scan":"manual")}/>;
+  // Onboarding gate (Sprint 2) : si pas de portefeuille ET pas encore de plan choisi ET pas skippé → PlanChoice
+  const needsPlan=portfolios.length===0&&!skippedOnb&&!(profile&&profile.trial_started_at);
+  if(needsPlan&&screen==="dash"){
+    return<PlanChoiceScreen user={user} onDone={()=>{load();setScreen("addPort")}} onSkip={()=>setSkippedOnb(true)}/>;
+  }
+
+  const isOnboarding=portfolios.length===0;
+  if(screen==="addPort")return<AddPortfolio user={user} onboarding={isOnboarding} onCreated={()=>{setScreen("dash");load()}}/>;
+  if(screen==="choice"&&selPort)return<AddPositionChoice portfolio={selPort} onboarding={isOnboarding&&positions.length===0} onBack={()=>setScreen("dash")} onPick={m=>setScreen(m==="scan"?"scan":"manual")}/>;
   if(screen==="scan"&&selPort)return<ScanScreen user={user} portfolio={selPort} onBack={()=>setScreen("choice")} onExtracted={list=>{setExtracted(list);setScreen("review")}}/>;
   if(screen==="review"&&selPort)return<ReviewScreen user={user} portfolio={selPort} extracted={extracted} onBack={()=>setScreen("scan")} onDone={n=>{setScreen("dash");load();showToast(`${n} position${n>1?"s":""} ajoutée${n>1?"s":""} ✓`)}}/>;
   if(screen==="manual"&&selPort)return<AddPosition user={user} portfolio={selPort} onAdded={()=>{setScreen("dash");load()}} onBack={()=>setScreen("choice")}/>;
@@ -842,7 +1008,6 @@ function Dashboard({user,onLogout}){
         </div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={()=>load()} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #333",background:"#0d0d20",color:"#60a5fa",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Rafraîchir</button>
-          <button onClick={()=>setScreen("profile")} style={{padding:"6px 12px",borderRadius:8,border:"1px solid #333",background:"#0d0d20",color:"#e0e0e0",fontSize:11,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Mon profil</button>
           <div style={{position:"relative"}}>
             <button onClick={()=>setMenuOpen(v=>!v)} style={{width:36,height:36,borderRadius:18,border:"1px solid #333",background:"linear-gradient(135deg,#3b82f6,#8b5cf6)",color:"#fff",fontSize:13,fontWeight:800,fontFamily:"inherit",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>{(user.email||"?").charAt(0).toUpperCase()}</button>
             {menuOpen&&<>
